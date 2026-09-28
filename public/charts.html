@@ -1,0 +1,394 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Keystone View — your charts</title>
+<meta name="description" content="Browse, edit and re-publish charts made in Keystone View.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    color-scheme: light;
+    --app-bg: #f4f5f7;
+    --panel-bg: #ffffff;
+    --panel-border: #e3e5ea;
+    --text-primary: #16181d;
+    --text-secondary: #5b5f6a;
+    --text-muted: #8b8f99;
+    --accent: #6186FF;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--app-bg); color: var(--text-primary); }
+  body {
+    font-family: Poppins, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 14px;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 40px 24px 80px; }
+  .top-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 28px; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  .sub { color: var(--text-secondary); margin: 0; font-size: 13px; }
+  .btn {
+    border: 1px solid var(--panel-border);
+    background: #fff;
+    border-radius: 7px;
+    padding: 9px 16px;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    color: var(--text-secondary);
+    text-decoration: none;
+    display: inline-block;
+    white-space: nowrap;
+  }
+  .btn:hover { border-color: var(--accent); color: var(--text-primary); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn.primary:hover { background: #4d70e6; border-color: #4d70e6; color: #fff; }
+
+  .layout { display: flex; gap: 28px; align-items: flex-start; }
+
+  /* --- folder sidebar --- */
+  .sidebar { width: 190px; flex-shrink: 0; }
+  .folder-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+  .folder-item {
+    display: flex; align-items: center; justify-content: space-between; gap: 6px;
+    padding: 7px 10px; border-radius: 7px; cursor: pointer;
+    color: var(--text-secondary); font-size: 13px; font-weight: 500;
+    border: 1px solid transparent;
+  }
+  .folder-item:hover { background: #ebedf1; }
+  .folder-item.active { background: #fff; color: var(--text-primary); border-color: var(--panel-border); }
+  .folder-item.drag-over { border-color: var(--accent); background: #eaf0ff; color: var(--text-primary); }
+  .folder-count { font-size: 11px; color: var(--text-muted); }
+  .folder-icon { opacity: .6; margin-right: 6px; }
+  .new-folder-row { margin-top: 10px; }
+  .new-folder-row input {
+    width: 100%; border: 1px solid var(--panel-border); border-radius: 7px;
+    padding: 7px 9px; font: inherit; font-size: 12.5px; margin-bottom: 6px;
+  }
+  .new-folder-btn {
+    width: 100%; text-align: left; background: none; border: 1px dashed var(--panel-border);
+    border-radius: 7px; padding: 7px 10px; font: inherit; font-size: 12.5px; color: var(--text-muted);
+    cursor: pointer;
+  }
+  .new-folder-btn:hover { color: var(--text-primary); border-color: var(--accent); }
+
+  .main { flex: 1; min-width: 0; }
+  .toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; gap: 10px; }
+  .toolbar h2 { font-size: 15px; margin: 0; font-weight: 600; }
+  .sort-select {
+    border: 1px solid var(--panel-border); background: #fff; border-radius: 7px;
+    padding: 7px 10px; font: inherit; font-size: 12.5px; color: var(--text-secondary); cursor: pointer;
+  }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 14px; }
+  .card {
+    background: var(--panel-bg);
+    border: 1px solid var(--panel-border);
+    border-radius: 10px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    text-decoration: none;
+    color: inherit;
+    transition: border-color .12s ease, box-shadow .12s ease, opacity .12s ease;
+    cursor: grab;
+  }
+  .card:hover { border-color: var(--accent); box-shadow: 0 4px 16px rgba(20,20,30,.06); }
+  .card.dragging { opacity: .4; }
+  .card-title { font-weight: 600; font-size: 14.5px; line-height: 1.35; margin: 0; }
+  .card-meta { display: flex; align-items: center; gap: 8px; font-size: 11.5px; color: var(--text-muted); flex-wrap: wrap; }
+  .badge {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 10.5px; font-weight: 600; letter-spacing: .02em; text-transform: uppercase;
+    padding: 2px 7px; border-radius: 999px; background: #f0f1f4; color: var(--text-secondary);
+  }
+  .badge-dot { width: 7px; height: 7px; border-radius: 50%; }
+  .card-actions { display: flex; gap: 8px; margin-top: 4px; }
+  .card-actions .btn { padding: 5px 10px; font-size: 11.5px; }
+
+  .empty { text-align: center; padding: 60px 20px; color: var(--text-muted); }
+  .empty p { margin: 0 0 16px; }
+  .state-msg { text-align: center; padding: 40px 20px; color: var(--text-muted); font-size: 13px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top-row">
+    <div>
+      <h1>Keystone View</h1>
+      <p class="sub">Every chart your team has published — click one to edit and republish.</p>
+    </div>
+    <a class="btn primary" href="/editor.html">+ New chart</a>
+  </div>
+
+  <div class="layout">
+    <div class="sidebar">
+      <ul class="folder-list" id="folderList"></ul>
+      <div class="new-folder-row" id="newFolderRow">
+        <button type="button" class="new-folder-btn" id="newFolderBtn">+ New folder</button>
+      </div>
+    </div>
+    <div class="main">
+      <div class="toolbar">
+        <h2 id="listTitle">All charts</h2>
+        <select class="sort-select" id="sortSelect">
+          <option value="updated-desc">Recently updated</option>
+          <option value="updated-asc">Oldest updated</option>
+          <option value="created-desc">Recently created</option>
+          <option value="created-asc">Oldest created</option>
+          <option value="title-asc">Title A–Z</option>
+        </select>
+      </div>
+      <div id="listArea">
+        <div class="state-msg">Loading…</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const THEME_COLORS = { keg: '#01B979', fau: '#7A3BFF' };
+const THEME_NAMES = { keg: 'KEG', fau: 'FAU' };
+const CHART_TYPE_NAMES = {
+  column_grouped: 'Grouped columns',
+  column_stacked: 'Stacked columns',
+  line: 'Line',
+  area: 'Area',
+  scatter: 'Scatter',
+  treemap: 'Treemap',
+};
+
+let allCharts = [];
+let allFolders = [];
+let activeFolder = null; // null = All charts, '' = Uncategorized, else a folder name
+let sortMode = 'updated-desc';
+
+function escapeHtml(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function timeAgo(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d)) return '';
+  const diffMs = Date.now() - d.getTime();
+  const mins = Math.round(diffMs / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.round(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.round(hours / 24);
+  if (days < 30) return `${days}d ago`;
+  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+function fullDate(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d)) return '';
+  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+async function loadAll() {
+  const [chartsRes, foldersRes] = await Promise.all([
+    fetch('/api/charts', { cache: 'no-store' }),
+    fetch('/api/folders', { cache: 'no-store' }),
+  ]);
+  if (!chartsRes.ok) throw new Error(`Server responded ${chartsRes.status}`);
+  const chartsData = await chartsRes.json();
+  allCharts = chartsData.charts || [];
+  allFolders = foldersRes.ok ? (await foldersRes.json()).folders || [] : [];
+}
+
+function renderFolderList() {
+  const ul = document.getElementById('folderList');
+  const countAll = allCharts.length;
+  const countUncat = allCharts.filter(c => !c.folder).length;
+
+  const items = [
+    { key: null, label: 'All charts', count: countAll },
+    { key: '', label: 'Uncategorized', count: countUncat },
+    ...allFolders.map(f => ({ key: f, label: f, count: allCharts.filter(c => c.folder === f).length })),
+  ];
+
+  ul.innerHTML = items.map(item => `
+    <li class="folder-item${activeFolder === item.key ? ' active' : ''}" data-folder="${escapeHtml(item.key ?? '')}" data-key="${item.key === null ? '__all__' : (item.key === '' ? '__uncat__' : escapeHtml(item.key))}">
+      <span><span class="folder-icon">${item.key === null ? '\u{1F4C1}' : (item.key === '' ? '\u{2014}' : '\u{1F4C2}')}</span>${escapeHtml(item.label)}</span>
+      <span class="folder-count">${item.count}</span>
+    </li>`).join('');
+
+  ul.querySelectorAll('.folder-item').forEach(el => {
+    const key = el.dataset.key;
+    const folderValue = key === '__all__' ? null : (key === '__uncat__' ? '' : el.dataset.folder);
+    el.addEventListener('click', () => { activeFolder = folderValue; renderAll(); });
+    el.addEventListener('dragover', (e) => { if (key !== '__all__') { e.preventDefault(); el.classList.add('drag-over'); } });
+    el.addEventListener('dragleave', () => el.classList.remove('drag-over'));
+    el.addEventListener('drop', async (e) => {
+      e.preventDefault();
+      el.classList.remove('drag-over');
+      if (key === '__all__') return;
+      const slug = e.dataTransfer.getData('text/plain');
+      if (!slug) return;
+      await moveChart(slug, folderValue);
+    });
+  });
+}
+
+async function moveChart(slug, folder) {
+  const chart = allCharts.find(c => c.slug === slug);
+  if (!chart || chart.folder === folder) return;
+  chart.folder = folder; // optimistic
+  renderAll();
+  try {
+    const res = await fetch(`/api/charts/${encodeURIComponent(slug)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ folder }),
+    });
+    if (!res.ok) throw new Error(`Server responded ${res.status}`);
+  } catch (err) {
+    document.getElementById('listArea').insertAdjacentHTML('afterbegin',
+      `<div class="state-msg">Couldn't move that chart: ${escapeHtml(err.message)} — try again.</div>`);
+    await loadAll();
+    renderAll();
+  }
+}
+
+function sortCharts(charts) {
+  const out = charts.slice();
+  switch (sortMode) {
+    case 'updated-asc': out.sort((a, b) => new Date(a.updatedAt) - new Date(b.updatedAt)); break;
+    case 'created-desc': out.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)); break;
+    case 'created-asc': out.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt)); break;
+    case 'title-asc': out.sort((a, b) => a.title.localeCompare(b.title)); break;
+    case 'updated-desc':
+    default: out.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+  }
+  return out;
+}
+
+function renderList() {
+  const area = document.getElementById('listArea');
+  const titleEl = document.getElementById('listTitle');
+  titleEl.textContent = activeFolder === null ? 'All charts' : (activeFolder === '' ? 'Uncategorized' : activeFolder);
+
+  const filtered = activeFolder === null ? allCharts : allCharts.filter(c => (c.folder || '') === activeFolder);
+  const charts = sortCharts(filtered);
+
+  if (!allCharts.length) {
+    area.innerHTML = `<div class="empty">
+      <p>No charts published yet.</p>
+      <a class="btn primary" href="/editor.html">Build your first chart</a>
+    </div>`;
+    return;
+  }
+  if (!charts.length) {
+    area.innerHTML = `<div class="state-msg">No charts in this folder yet — drag one here from another folder.</div>`;
+    return;
+  }
+
+  area.innerHTML = `<div class="grid">${charts.map(c => `
+    <a class="card" draggable="true" data-slug="${escapeHtml(c.slug)}" href="/editor.html?slug=${encodeURIComponent(c.slug)}">
+      <p class="card-title">${escapeHtml(c.title)}</p>
+      <div class="card-meta">
+        ${c.theme ? `<span class="badge"><span class="badge-dot" style="background:${THEME_COLORS[c.theme] || '#999'}"></span>${THEME_NAMES[c.theme] || c.theme}</span>` : ''}
+        <span>${CHART_TYPE_NAMES[c.chartType] || c.chartType || ''}</span>
+      </div>
+      <div class="card-meta">Updated ${timeAgo(c.updatedAt)} &middot; Created ${fullDate(c.createdAt)}</div>
+      <div class="card-actions">
+        <span class="btn">Edit</span>
+        <span class="btn" onclick="event.preventDefault(); event.stopPropagation(); window.open('/chart/${encodeURIComponent(c.slug)}', '_blank');">View live</span>
+      </div>
+    </a>`).join('')}</div>`;
+
+  area.querySelectorAll('.card').forEach(card => {
+    card.addEventListener('dragstart', (e) => {
+      e.dataTransfer.setData('text/plain', card.dataset.slug);
+      e.dataTransfer.effectAllowed = 'move';
+      card.classList.add('dragging');
+    });
+    card.addEventListener('dragend', () => card.classList.remove('dragging'));
+  });
+}
+
+function renderAll() {
+  renderFolderList();
+  renderList();
+}
+
+function setupNewFolder() {
+  const row = document.getElementById('newFolderRow');
+  const btn = document.getElementById('newFolderBtn');
+  btn.addEventListener('click', () => {
+    row.innerHTML = `<input type="text" id="newFolderInput" placeholder="Folder name" autofocus>`;
+    const input = document.getElementById('newFolderInput');
+    input.focus();
+    // Enter, blur (clicking away) and Escape can all fire for the same
+    // interaction — e.g. Enter blurs the field as it's removed from the
+    // DOM, which would otherwise re-trigger this and crash on the
+    // already-replaced innerHTML. One flag makes sure only the first of
+    // these actually runs.
+    let settled = false;
+    const closeRow = () => {
+      row.innerHTML = `<button type="button" class="new-folder-btn" id="newFolderBtn">+ New folder</button>`;
+      setupNewFolder();
+    };
+    const finish = async () => {
+      if (settled) return;
+      settled = true;
+      const name = input.value.trim();
+      closeRow();
+      if (!name) return;
+      try {
+        const res = await fetch('/api/folders', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name }),
+        });
+        if (!res.ok) throw new Error(`Server responded ${res.status}`);
+        const data = await res.json();
+        allFolders = data.folders || allFolders;
+        activeFolder = name;
+        renderAll();
+      } catch (err) {
+        document.getElementById('listArea').insertAdjacentHTML('afterbegin',
+          `<div class="state-msg">Couldn't create that folder: ${escapeHtml(err.message)}</div>`);
+      }
+    };
+    const cancel = () => {
+      if (settled) return;
+      settled = true;
+      closeRow();
+    };
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') finish();
+      if (e.key === 'Escape') cancel();
+    });
+    input.addEventListener('blur', finish);
+  });
+}
+
+document.getElementById('sortSelect').addEventListener('change', (e) => {
+  sortMode = e.target.value;
+  renderList();
+});
+
+async function load() {
+  const area = document.getElementById('listArea');
+  try {
+    await loadAll();
+    renderAll();
+    setupNewFolder();
+  } catch (err) {
+    area.innerHTML = `<div class="state-msg">Couldn't load charts: ${escapeHtml(err.message)}</div>`;
+  }
+}
+
+load();
+</script>
+</body>
+</html>

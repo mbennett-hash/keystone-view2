@@ -1,0 +1,1182 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Keystone View — chart editor</title>
+<meta name="description" content="Keystone View: data grid, KEG/FAU brand themes, header/footer/source, live preview, and publish-to-embed.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="echarts.min.js"></script>
+<script src="chart-lib.js"></script>
+<style>
+  :root {
+    color-scheme: light;
+    --app-bg: #f4f5f7;
+    --panel-bg: #ffffff;
+    --panel-border: #e3e5ea;
+    --text-primary: #16181d;
+    --text-secondary: #5b5f6a;
+    --text-muted: #8b8f99;
+    --accent: #6186FF;
+    --accent-ring: rgba(97,134,255,.35);
+    --radius: 10px;
+    --chart-surface: #ffffff;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--app-bg); color: var(--text-primary); }
+  body {
+    font-family: Poppins, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 14px;
+    line-height: 1.45;
+  }
+  .app {
+    display: grid;
+    grid-template-columns: 380px 1fr;
+    min-height: 100vh;
+  }
+  @media (max-width: 900px) {
+    .app { grid-template-columns: 1fr; }
+  }
+
+  /* ---------- Editor panel ---------- */
+  .editor {
+    background: var(--panel-bg);
+    border-right: 1px solid var(--panel-border);
+    padding: 20px;
+    overflow-y: auto;
+    max-height: 100vh;
+    min-width: 0; /* prevent grid-item content (wide table) from blowing out the track */
+  }
+  .preview-panel { min-width: 0; }
+  .back-link {
+    display: inline-block;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-muted);
+    text-decoration: none;
+    margin-bottom: 10px;
+  }
+  .back-link:hover { color: var(--accent); }
+  .editor h1 {
+    font-size: 15px;
+    font-weight: 600;
+    margin: 0 0 2px;
+  }
+  .editor .sub {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin: 0 0 18px;
+  }
+  .section {
+    border-top: 1px solid var(--panel-border);
+    padding: 16px 0;
+  }
+  .section:first-of-type { border-top: none; padding-top: 0; }
+  .section-title {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: var(--text-muted);
+    margin: 0 0 10px;
+  }
+  .field { margin-bottom: 12px; }
+  .field label {
+    display: block;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    margin-bottom: 5px;
+  }
+  .field input[type=text],
+  .field input[type=url],
+  .field select,
+  .field textarea {
+    width: 100%;
+    padding: 7px 9px;
+    border: 1px solid var(--panel-border);
+    border-radius: 7px;
+    font: inherit;
+    font-size: 13px;
+    background: #fff;
+    color: var(--text-primary);
+  }
+  .field input:focus, .field select:focus, .field textarea:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-ring);
+  }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .theme-toggle {
+    display: flex;
+    gap: 6px;
+    background: #f0f1f4;
+    padding: 4px;
+    border-radius: 9px;
+  }
+  .theme-toggle button {
+    flex: 1;
+    border: none;
+    background: transparent;
+    padding: 8px 6px;
+    border-radius: 6px;
+    font: inherit;
+    font-weight: 600;
+    font-size: 12.5px;
+    cursor: pointer;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+  }
+  .theme-toggle button.active {
+    background: #fff;
+    color: var(--text-primary);
+    box-shadow: 0 1px 2px rgba(0,0,0,.08);
+  }
+  .swatch-dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+
+  .chart-type-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+  }
+  .chart-type-grid button {
+    border: 1px solid var(--panel-border);
+    background: #fff;
+    border-radius: 8px;
+    padding: 8px 4px 7px;
+    cursor: pointer;
+    font: inherit;
+    font-size: 11px;
+    color: var(--text-secondary);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+  }
+  .chart-type-grid button.active {
+    border-color: var(--accent);
+    background: #f2f5ff;
+    color: var(--text-primary);
+    box-shadow: 0 0 0 3px var(--accent-ring);
+  }
+  .chart-type-grid svg { width: 26px; height: 20px; }
+
+  /* data grid */
+  .grid-wrap { border: 1px solid var(--panel-border); border-radius: 8px; overflow-x: auto; }
+  table.datagrid { width: 100%; min-width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  table.datagrid th, table.datagrid td { white-space: nowrap; }
+  table.datagrid td:first-child input, table.datagrid th:first-child { white-space: normal; }
+  table.datagrid th, table.datagrid td { border-bottom: 1px solid var(--panel-border); border-right: 1px solid var(--panel-border); padding: 0; }
+  table.datagrid th:last-child, table.datagrid td:last-child { border-right: none; }
+  table.datagrid tr:last-child td { border-bottom: none; }
+  table.datagrid th {
+    background: #f7f8fa;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-align: left;
+    padding: 8px 9px;
+  }
+  table.datagrid td input {
+    width: 100%;
+    border: none;
+    padding: 8px 9px;
+    font: inherit;
+    font-size: 12.5px;
+    background: transparent;
+    color: var(--text-primary);
+  }
+  table.datagrid td input:focus { outline: 2px solid var(--accent-ring); outline-offset: -2px; background: #fbfcff; }
+  .row-color-cell { display: flex; align-items: center; gap: 6px; padding: 4px 6px !important; }
+  .row-color-cell input[type=color] { width: 20px; height: 20px; border: none; padding: 0; background: none; cursor: pointer; }
+  .grid-actions { display: flex; gap: 8px; margin-top: 8px; }
+  .btn {
+    border: 1px solid var(--panel-border);
+    background: #fff;
+    border-radius: 7px;
+    padding: 6px 11px;
+    font: inherit;
+    font-size: 12.5px;
+    font-weight: 500;
+    cursor: pointer;
+    color: var(--text-secondary);
+  }
+  .btn:hover { border-color: var(--accent); color: var(--text-primary); }
+  .btn.small { padding: 4px 8px; font-size: 11.5px; }
+  .btn.remove { color: #c1442a; }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn.primary:hover { background: #4d70e6; border-color: #4d70e6; color: #fff; }
+  .btn.primary:disabled { opacity: .6; cursor: default; }
+  .publish-row { display: flex; align-items: flex-end; gap: 10px; margin: 18px 0 2px; }
+  textarea.paste-box { min-height: 70px; font-family: ui-monospace, SFMono-Regular, monospace; font-size: 11.5px; resize: vertical; }
+  .hint { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
+  .history-item { border-left: 2px solid var(--panel-border); padding: 2px 0 2px 10px; }
+  .history-item .h-top { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; font-weight: 600; color: var(--text-primary); }
+  .history-item .h-date { font-weight: 500; color: var(--text-muted); font-size: 11px; white-space: nowrap; }
+  .history-item .h-note { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+
+  /* number format */
+  .fmt-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+
+  .check-row {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 12.5px;
+    color: var(--text-secondary);
+    font-weight: 500;
+    margin-bottom: 8px;
+    cursor: pointer;
+    user-select: none;
+  }
+  .check-row:last-of-type { margin-bottom: 0; }
+  .check-row input[type=checkbox] { width: 14px; height: 14px; accent-color: var(--accent); cursor: pointer; }
+
+  /* per-series line/dots mode toggle in the data grid header */
+  .series-mode-toggle { display: flex; gap: 2px; margin-top: 3px; }
+  .series-mode-toggle button {
+    flex: 1;
+    border: 1px solid var(--panel-border);
+    background: #fff;
+    font-size: 10px;
+    font-weight: 500;
+    padding: 2px 0;
+    border-radius: 4px;
+    cursor: pointer;
+    color: var(--text-muted);
+  }
+  .series-mode-toggle button.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .series-visible-cb { flex-shrink: 0; accent-color: var(--accent); cursor: pointer; }
+  .series-name[data-hidden="true"] { text-decoration: line-through; opacity: .5; }
+
+  /* ---------- Preview panel ---------- */
+  .preview-panel {
+    padding: 20px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .preview-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .viewport-toggle {
+    display: flex;
+    gap: 4px;
+    background: #fff;
+    border: 1px solid var(--panel-border);
+    padding: 3px;
+    border-radius: 9px;
+  }
+  .viewport-toggle button {
+    border: none;
+    background: transparent;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font: inherit;
+    font-size: 12.5px;
+    font-weight: 500;
+    cursor: pointer;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .viewport-toggle button.active { background: #eef1ff; color: var(--accent); }
+  .status-pill {
+    font-size: 11.5px;
+    color: var(--text-muted);
+    background: #fff;
+    border: 1px solid var(--panel-border);
+    padding: 5px 10px;
+    border-radius: 999px;
+  }
+  .canvas-frame {
+    background: #eceef2;
+    border-radius: 14px;
+    padding: 28px;
+    display: flex;
+    justify-content: center;
+    flex: 1;
+    min-height: 480px;
+  }
+  .chart-card {
+    background: var(--chart-surface);
+    border-radius: 4px;
+    box-shadow: 0 1px 3px rgba(20,20,30,.06), 0 8px 24px rgba(20,20,30,.05);
+    width: 100%;
+    max-width: 860px;
+    transition: max-width .25s ease;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .chart-card.mobile { max-width: 375px; }
+
+  .cc-header { padding: 24px 24px 0; }
+  .cc-title { font-weight: 700; font-size: 18px; line-height: 1.35; margin: 0; }
+  .cc-subtitle { font-weight: 500; font-size: 13px; margin: 4px 0 0; }
+  /* Only shown for treemap, where box size otherwise carries an unlabelled
+     value — this states which column the boxes are sized by. */
+  .cc-value-caption { font-weight: 500; font-size: 11px; letter-spacing: .02em; text-transform: uppercase; margin: 10px 0 0; }
+  .cc-body { padding: 18px 22px 0; flex: 1; min-height: 280px; }
+  .chart-card.mobile .cc-body { min-height: 300px; }
+  /* Legend lives in normal HTML flow BELOW the chart canvas, never inside
+     it — this is deliberate: an echarts-internal legend has to guess how
+     much vertical space to reserve above itself, and that guess breaks at
+     whatever width nobody tested (as happened here). A flex-wrapped HTML
+     row below the canvas can never collide with the axis, at any width. */
+  .cc-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 18px;
+    padding: 10px 22px 2px;
+    justify-content: center;
+  }
+  .cc-legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border: none;
+    background: none;
+    padding: 2px 0;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: inherit;
+    line-height: 1.3;
+    color: var(--text-secondary, #5b5f6a);
+    opacity: 1;
+    transition: opacity .15s ease;
+  }
+  .cc-legend-item.is-off { opacity: .4; }
+  .cc-legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .cc-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 16px 24px 22px;
+    border-top: 1px solid #eef0f3;
+    margin-top: 10px;
+  }
+  .cc-source { font-size: 11px; line-height: 1.5; }
+  .cc-source a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+  .cc-source .note { display: block; opacity: .75; margin-top: 2px; }
+  .cc-logo { height: 20px; max-width: 130px; object-fit: contain; flex-shrink: 0; display: block; }
+  .cc-logo.placeholder {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .04em;
+    padding: 4px 8px;
+    border-radius: 4px;
+    background: #f0f1f4;
+    color: var(--text-muted);
+    height: auto;
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .embed-box {
+    background: #14161c;
+    color: #dfe3ea;
+    border-radius: 10px;
+    padding: 14px 16px;
+    font-family: ui-monospace, SFMono-Regular, monospace;
+    font-size: 11.5px;
+    line-height: 1.6;
+    overflow-x: auto;
+    white-space: pre;
+    position: relative;
+  }
+  .embed-box .lbl { position: absolute; top: 8px; right: 12px; font-family: Poppins, sans-serif; font-size: 10.5px; color: #7d8390; }
+
+  ::selection { background: var(--accent-ring); }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <!-- ===================== EDITOR ===================== -->
+  <div class="editor">
+    <a href="/charts.html" class="back-link">&larr; All charts</a>
+    <h1>Keystone View</h1>
+    <p class="sub">Build a chart, then publish it for a script embed.</p>
+
+    <div class="section">
+      <div class="section-title">Brand theme</div>
+      <div class="theme-toggle" id="themeToggle">
+        <button data-theme="keg" class="active"><span class="swatch-dot" style="background:#103B5F"></span>KEG</button>
+        <button data-theme="fau"><span class="swatch-dot" style="background:#7A3BFF"></span>FAU</button>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Chart type</div>
+      <div class="chart-type-grid" id="chartTypeGrid">
+        <button data-type="column_grouped" class="active">
+          <svg viewBox="0 0 26 20"><g fill="currentColor"><rect x="1" y="8" width="3" height="12" rx="1"/><rect x="5" y="3" width="3" height="17" rx="1"/><rect x="11" y="10" width="3" height="10" rx="1"/><rect x="15" y="5" width="3" height="15" rx="1"/><rect x="21" y="11" width="3" height="9" rx="1"/></g></svg>
+          Grouped
+        </button>
+        <button data-type="column_stacked">
+          <svg viewBox="0 0 26 20"><g fill="currentColor"><rect x="2" y="10" width="5" height="10" rx="1"/><rect x="2" y="2" width="5" height="7" opacity=".5"/><rect x="10.5" y="6" width="5" height="14" rx="1"/><rect x="10.5" y="1" width="5" height="4" opacity=".5"/><rect x="19" y="12" width="5" height="8" rx="1"/><rect x="19" y="4" width="5" height="7" opacity=".5"/></g></svg>
+          Stacked
+        </button>
+        <button data-type="line">
+          <svg viewBox="0 0 26 20"><path d="M1 16 L8 8 L14 12 L25 2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="25" cy="2" r="2" fill="currentColor"/></svg>
+          Line
+        </button>
+        <button data-type="area">
+          <svg viewBox="0 0 26 20"><path d="M1 16 L8 8 L14 12 L25 2 L25 19 L1 19 Z" fill="currentColor" opacity=".25" stroke="none"/><path d="M1 16 L8 8 L14 12 L25 2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Area
+        </button>
+        <button data-type="scatter">
+          <svg viewBox="0 0 26 20"><g fill="currentColor"><circle cx="4" cy="15" r="2.4"/><circle cx="11" cy="6" r="2.4"/><circle cx="16" cy="13" r="2.4"/><circle cx="22" cy="4" r="2.4"/><circle cx="9" cy="17" r="2.4"/></g></svg>
+          Scatter
+        </button>
+        <button data-type="treemap">
+          <svg viewBox="0 0 26 20"><g fill="currentColor"><rect x="0" y="0" width="14" height="12" rx="1"/><rect x="15" y="0" width="11" height="7" rx="1" opacity=".55"/><rect x="15" y="8" width="11" height="4" rx="1" opacity=".35"/><rect x="0" y="13" width="8" height="7" rx="1" opacity=".55"/><rect x="9" y="13" width="17" height="7" rx="1" opacity=".7"/></g></svg>
+          Treemap
+        </button>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Data</div>
+      <div class="hint" id="scatterHint" style="display:none;margin-bottom:8px;">Scatter reads the Category column as numeric X values (non-numbers fall back to row position). Treemap sizes each box by the first ticked series only.</div>
+      <div class="grid-wrap">
+        <table class="datagrid" id="dataGrid"></table>
+      </div>
+      <div class="grid-actions">
+        <button class="btn small" id="addRow">+ Row</button>
+        <button class="btn small" id="addCol">+ Series</button>
+      </div>
+      <div class="hint">Tick a series' checkbox to include/exclude it from the chart entirely.</div>
+      <details style="margin-top:10px;">
+        <summary style="cursor:pointer;font-size:12px;color:var(--text-secondary);font-weight:500;">Paste from Excel / CSV</summary>
+        <textarea class="paste-box" id="pasteBox" placeholder="Category&#9;Series 1&#9;Series 2&#10;18-24&#9;32&#9;17"></textarea>
+        <button class="btn small" id="applyPaste" style="margin-top:6px;">Apply</button>
+        <div class="hint">Tab- or comma-separated. First row = headers, first column = categories.</div>
+      </details>
+    </div>
+
+    <div class="section" id="axisLegendSection">
+      <div class="section-title">Axis &amp; legend</div>
+      <label class="check-row"><input type="checkbox" id="toggleXAxis" checked> Show X axis</label>
+      <label class="check-row"><input type="checkbox" id="toggleYAxis" checked> Show Y axis</label>
+      <label class="check-row"><input type="checkbox" id="toggleLegend" checked> Show legend</label>
+      <div class="hint" id="treemapAxisNote" style="display:none;">Axis toggles don't apply to treemap — it has no axes.</div>
+      <div class="fmt-grid" id="yAxisRangeRow" style="margin-top:8px;">
+        <div class="field">
+          <label>Y axis min</label>
+          <input type="number" id="yAxisMin" placeholder="Auto">
+        </div>
+        <div class="field">
+          <label>Y axis max</label>
+          <input type="number" id="yAxisMax" placeholder="Auto">
+        </div>
+      </div>
+      <div class="hint" id="yAxisRangeHint" style="display:none;">Y axis range doesn't apply to treemap — it has no axes.</div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Number format</div>
+      <div class="fmt-grid">
+        <div class="field">
+          <label>Prefix</label>
+          <input type="text" id="fmtPrefix" value="" placeholder="£">
+        </div>
+        <div class="field">
+          <label>Suffix</label>
+          <input type="text" id="fmtSuffix" value="%" placeholder="%">
+        </div>
+      </div>
+      <div class="field">
+        <label>Decimal places</label>
+        <select id="fmtDecimals">
+          <option value="0" selected>0</option>
+          <option value="1">1</option>
+          <option value="2">2</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Header</div>
+      <div class="field">
+        <label>Title</label>
+        <input type="text" id="titleInput" value="How do UK audiences expect to fund a Masters?">
+      </div>
+      <div class="field">
+        <label>Subtitle</label>
+        <input type="text" id="subtitleInput" value="(Primary funding source, by age band)">
+      </div>
+      <label class="check-row"><input type="checkbox" id="toggleTitleBold" checked> Bold title</label>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Typography</div>
+      <div class="fmt-grid">
+        <div class="field">
+          <label>Title size</label>
+          <input type="text" inputmode="numeric" id="fontTitle" value="18">
+        </div>
+        <div class="field">
+          <label>Subtitle size</label>
+          <input type="text" inputmode="numeric" id="fontSubtitle" value="13">
+        </div>
+        <div class="field">
+          <label>Axis label size</label>
+          <input type="text" inputmode="numeric" id="fontAxis" value="11.5">
+        </div>
+        <div class="field">
+          <label>Footer size</label>
+          <input type="text" inputmode="numeric" id="fontFooter" value="11">
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Footer</div>
+      <div class="row2">
+        <div class="field">
+          <label>Source label</label>
+          <input type="text" id="sourceLabel" value="Keystone Pulse: Aug–Nov 2025">
+        </div>
+        <div class="field">
+          <label>Source URL <span style="color:var(--text-muted);font-weight:400;">(optional)</span></label>
+          <input type="url" id="sourceUrl" value="" placeholder="https://…">
+        </div>
+      </div>
+      <div class="field">
+        <label>Note <span style="color:var(--text-muted);font-weight:400;">(optional, shown under source)</span></label>
+        <input type="text" id="sourceNote" value="">
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== PREVIEW ===================== -->
+  <div class="preview-panel">
+    <div class="preview-toolbar">
+      <div class="viewport-toggle" id="viewportToggle">
+        <button data-vp="desktop" class="active">🖥 Desktop</button>
+        <button data-vp="mobile">📱 Mobile</button>
+      </div>
+      <div class="status-pill" id="statusPill">Draft — not published</div>
+    </div>
+
+    <div class="canvas-frame">
+      <div class="chart-card" id="chartCard">
+        <div class="cc-header">
+          <p class="cc-title" id="ccTitle"></p>
+          <p class="cc-subtitle" id="ccSubtitle"></p>
+          <p class="cc-value-caption" id="ccValueCaption"></p>
+        </div>
+        <div class="cc-body" id="ccBody"></div>
+        <div class="cc-legend" id="ccLegend"></div>
+        <div class="cc-footer">
+          <div class="cc-source" id="ccSource"></div>
+          <div id="ccLogoWrap"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="publish-row">
+      <div class="field" style="flex:1;">
+        <label>Slug (part of the chart's URL)</label>
+        <input type="text" id="slugInput" placeholder="how-do-uk-audiences-expect-to-fund-a-masters">
+      </div>
+      <button class="btn primary" id="publishBtn" type="button">Publish</button>
+    </div>
+    <div class="publish-row" style="margin-top:0;">
+      <div class="field" style="flex:1;">
+        <label>Your name</label>
+        <input type="text" id="authorInput" placeholder="e.g. Mark Bennett">
+      </div>
+      <div class="field" style="flex:2;">
+        <label>What did you change, and why? (optional)</label>
+        <input type="text" id="changeNoteInput" placeholder="e.g. Updated Q3 figures from the latest survey">
+      </div>
+    </div>
+    <div class="hint" id="publishStatus"></div>
+
+    <div>
+      <div class="section-title" style="margin-bottom:6px;">Embed snippet (matches Flourish's div+script pattern)</div>
+      <div class="embed-box" id="embedBox"><span class="lbl">HTML</span></div>
+    </div>
+
+    <div id="historyPanel" style="display:none;">
+      <div class="section-title" style="margin-bottom:6px;">Edit history</div>
+      <ul id="historyList" style="list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:8px;"></ul>
+    </div>
+  </div>
+</div>
+
+<script>
+/* =========================================================================
+   THEMES — validated categorical orders (dataviz skill: color-formula.md).
+   KEG order: green, blue, pink, violet, coral — all-pass, no CVD warn.
+   FAU order: violet, green, blue(lightened from #0000BF to clear the
+   L>=0.43 lightness floor — #0000BF alone fails it), + two generated tints.
+   Navy/pale-blue (KEG) and #0000BF (FAU, as given) are reserved for
+   text/background roles — they fail chroma/lightness as data marks.
+   ========================================================================= */
+// THEMES, fmtNum, seriesColor(s), visibleSeriesIndices, yAxisRange,
+// parseXValue and buildOption all now live in chart-lib.js, shared with
+// embed.js so a published chart is built by the exact code that previewed
+// it here. These names stay as thin delegations to ChartLib (rather than
+// being deleted) so nothing below has to change its call sites.
+const THEMES = ChartLib.THEMES;
+
+/* =========================================================================
+   STATE
+   ========================================================================= */
+let state = {
+  theme: 'keg',
+  chartType: 'column_grouped',
+  viewport: 'desktop',
+  categories: ['18–24', '25–34', '35–44'],
+  seriesNames: ['Govt funding (incl. loans)', 'University scholarship', 'Charitable grant', 'Employer contribution'],
+  seriesColors: [null, null, null, null], // null = inherit from theme order
+  seriesVisible: [true, true, true, true], // editor-time include/exclude — excluded series never reach the chart at all
+  seriesMode: ['line', 'line', 'line', 'line'], // 'line' (joined) or 'dots' (markers only) — used by line/area types
+  data: [
+    [32, 17, 4, 2],
+    [29, 12, 7, 6],
+    [26, 12, 11, 7],
+  ],
+  fmt: { prefix: '', suffix: '%', decimals: 0 },
+  title: 'How do UK audiences expect to fund a Masters?',
+  subtitle: '(Primary funding source, by age band)',
+  sourceLabel: 'Keystone Pulse: Aug–Nov 2025',
+  sourceUrl: '',
+  sourceNote: '',
+  showXAxis: true,
+  showYAxis: true,
+  showLegend: true,
+  yAxisMin: '', // '' = auto (echarts default); otherwise a number typed by the user
+  yAxisMax: '',
+  fonts: { title: 18, subtitle: 13, axis: 11.5, footer: 11 },
+  titleBold: true,
+  folder: null, // which folder this chart is filed under in the library — set by drag-and-drop there, not in the editor
+};
+
+let chart = null;
+
+/* =========================================================================
+   DATA GRID
+   ========================================================================= */
+function renderGrid() {
+  const table = document.getElementById('dataGrid');
+  const t = THEMES[state.theme];
+  const showModeToggle = state.chartType === 'line' || state.chartType === 'area';
+  let html = `<thead><tr><th style="width:90px;">${state.chartType === 'scatter' ? 'Category (X)' : 'Category'}</th>`;
+  state.seriesNames.forEach((name, si) => {
+    const hidden = !state.seriesVisible[si];
+    const mode = state.seriesMode[si] || 'line';
+    html += `<th>
+      <div class="row-color-cell" style="padding:4px 6px 2px !important;">
+        <input type="checkbox" class="series-visible-cb" data-series="${si}" title="Include in chart" ${hidden ? '' : 'checked'}>
+        <input type="color" data-series="${si}" class="series-color" value="${seriesColor(si)}">
+        <input type="text" data-series="${si}" class="series-name" data-hidden="${hidden}" value="${escapeAttr(name)}" style="border:none;padding:2px;font-weight:600;">
+      </div>
+      ${showModeToggle ? `<div class="series-mode-toggle" data-series="${si}">
+        <button type="button" class="mode-btn ${mode === 'line' ? 'active' : ''}" data-mode="line" data-series="${si}">Line</button>
+        <button type="button" class="mode-btn ${mode === 'dots' ? 'active' : ''}" data-mode="dots" data-series="${si}">Dots</button>
+      </div>` : ''}
+    </th>`;
+  });
+  html += `<th style="width:26px;"></th></tr></thead><tbody>`;
+  state.categories.forEach((cat, ri) => {
+    html += `<tr><td><input type="text" data-row="${ri}" class="cat-input" value="${escapeAttr(cat)}"></td>`;
+    state.seriesNames.forEach((_, si) => {
+      const v = state.data[ri]?.[si] ?? '';
+      html += `<td><input type="text" inputmode="decimal" data-row="${ri}" data-series="${si}" class="cell-input" value="${v}"></td>`;
+    });
+    html += `<td><button class="btn small remove" data-row="${ri}" title="Remove row" style="border:none;">✕</button></td></tr>`;
+  });
+  html += '</tbody>';
+  table.innerHTML = html;
+
+  table.querySelectorAll('.cat-input').forEach(el => el.addEventListener('input', e => {
+    state.categories[+e.target.dataset.row] = e.target.value;
+    update();
+  }));
+  table.querySelectorAll('.cell-input').forEach(el => el.addEventListener('input', e => {
+    const r = +e.target.dataset.row, s = +e.target.dataset.series;
+    const val = parseFloat(e.target.value);
+    if (!state.data[r]) state.data[r] = [];
+    state.data[r][s] = isNaN(val) ? 0 : val;
+    update();
+  }));
+  table.querySelectorAll('.series-name').forEach(el => el.addEventListener('input', e => {
+    state.seriesNames[+e.target.dataset.series] = e.target.value;
+    update();
+  }));
+  table.querySelectorAll('.series-color').forEach(el => el.addEventListener('input', e => {
+    state.seriesColors[+e.target.dataset.series] = e.target.value;
+    update();
+  }));
+  table.querySelectorAll('.series-visible-cb').forEach(el => el.addEventListener('change', e => {
+    const i = +e.target.dataset.series;
+    state.seriesVisible[i] = e.target.checked;
+    renderGrid();
+    update();
+  }));
+  table.querySelectorAll('.mode-btn').forEach(el => el.addEventListener('click', e => {
+    const i = +e.target.dataset.series;
+    state.seriesMode[i] = e.target.dataset.mode;
+    renderGrid();
+    update();
+  }));
+  table.querySelectorAll('.remove').forEach(el => el.addEventListener('click', e => {
+    const r = +e.target.dataset.row;
+    state.categories.splice(r, 1);
+    state.data.splice(r, 1);
+    renderGrid();
+    update();
+  }));
+}
+
+function seriesColor(i) {
+  return ChartLib.seriesColor(state, i);
+}
+
+function escapeAttr(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+}
+
+document.getElementById('addRow').addEventListener('click', () => {
+  state.categories.push('New category');
+  state.data.push(state.seriesNames.map(() => 0));
+  renderGrid();
+  update();
+});
+document.getElementById('addCol').addEventListener('click', () => {
+  if (state.seriesNames.length >= 8) return alert('Max 8 series in this prototype (matches the validated palette length).');
+  state.seriesNames.push('Series ' + (state.seriesNames.length + 1));
+  state.seriesColors.push(null);
+  state.seriesVisible.push(true);
+  state.seriesMode.push('line');
+  state.data.forEach(row => row.push(0));
+  renderGrid();
+  update();
+});
+document.getElementById('applyPaste').addEventListener('click', () => {
+  const raw = document.getElementById('pasteBox').value.trim();
+  if (!raw) return;
+  const rows = raw.split('\n').map(r => r.split(/\t|,(?!\d)/).map(c => c.trim()));
+  const header = rows[0];
+  state.seriesNames = header.slice(1);
+  state.seriesColors = state.seriesNames.map(() => null);
+  state.seriesVisible = state.seriesNames.map(() => true);
+  state.seriesMode = state.seriesNames.map(() => 'line');
+  state.categories = [];
+  state.data = [];
+  rows.slice(1).forEach(r => {
+    if (!r[0]) return;
+    state.categories.push(r[0]);
+    state.data.push(r.slice(1).map(v => parseFloat(v) || 0));
+  });
+  renderGrid();
+  update();
+});
+
+/* =========================================================================
+   CONTROLS
+   ========================================================================= */
+document.getElementById('themeToggle').addEventListener('click', e => {
+  const btn = e.target.closest('button[data-theme]');
+  if (!btn) return;
+  document.querySelectorAll('#themeToggle button').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  state.theme = btn.dataset.theme;
+  renderGrid();
+  update();
+});
+
+// The treemap/scatter-specific show/hide/disable logic lives here so it
+// can run both from the chart-type click handler and when a saved chart
+// is loaded by slug (which sets state.chartType directly, with no click
+// to trigger it otherwise).
+function applyChartTypeUI(chartType) {
+  const isTreemap = chartType === 'treemap';
+  document.getElementById('toggleXAxis').disabled = isTreemap;
+  document.getElementById('toggleYAxis').disabled = isTreemap;
+  document.getElementById('treemapAxisNote').style.display = isTreemap ? '' : 'none';
+  document.getElementById('yAxisMin').disabled = isTreemap;
+  document.getElementById('yAxisMax').disabled = isTreemap;
+  document.getElementById('yAxisRangeRow').style.display = isTreemap ? 'none' : '';
+  document.getElementById('yAxisRangeHint').style.display = isTreemap ? '' : 'none';
+  document.getElementById('scatterHint').style.display = (isTreemap || chartType === 'scatter') ? '' : 'none';
+}
+
+document.getElementById('chartTypeGrid').addEventListener('click', e => {
+  const btn = e.target.closest('button[data-type]');
+  if (!btn) return;
+  document.querySelectorAll('#chartTypeGrid button').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  state.chartType = btn.dataset.type;
+  applyChartTypeUI(state.chartType);
+  renderGrid(); // header changes: line/dots toggle appears for line & area; "Category (X)" label for scatter
+  update();
+});
+
+document.getElementById('viewportToggle').addEventListener('click', e => {
+  const btn = e.target.closest('button[data-vp]');
+  if (!btn) return;
+  document.querySelectorAll('#viewportToggle button').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  state.viewport = btn.dataset.vp;
+  document.getElementById('chartCard').classList.toggle('mobile', state.viewport === 'mobile');
+  setTimeout(() => { if (chart) { chart.resize(); chart.setOption(buildOption(), true); } }, 260);
+});
+
+['titleInput','subtitleInput','sourceLabel','sourceUrl','sourceNote','fmtPrefix','fmtSuffix',
+ 'fontTitle','fontSubtitle','fontAxis','fontFooter','yAxisMin','yAxisMax'].forEach(id => {
+  document.getElementById(id).addEventListener('input', syncFieldsToState);
+});
+['fmtDecimals'].forEach(id => document.getElementById(id).addEventListener('change', syncFieldsToState));
+['toggleXAxis','toggleYAxis','toggleLegend','toggleTitleBold'].forEach(id => {
+  document.getElementById(id).addEventListener('change', syncFieldsToState);
+});
+
+function syncFieldsToState() {
+  state.title = document.getElementById('titleInput').value;
+  state.subtitle = document.getElementById('subtitleInput').value;
+  state.sourceLabel = document.getElementById('sourceLabel').value;
+  state.sourceUrl = document.getElementById('sourceUrl').value;
+  state.sourceNote = document.getElementById('sourceNote').value;
+  state.fmt.prefix = document.getElementById('fmtPrefix').value;
+  state.fmt.suffix = document.getElementById('fmtSuffix').value;
+  state.fmt.decimals = +document.getElementById('fmtDecimals').value;
+  state.showXAxis = document.getElementById('toggleXAxis').checked;
+  state.showYAxis = document.getElementById('toggleYAxis').checked;
+  state.showLegend = document.getElementById('toggleLegend').checked;
+  state.yAxisMin = document.getElementById('yAxisMin').value;
+  state.yAxisMax = document.getElementById('yAxisMax').value;
+  state.titleBold = document.getElementById('toggleTitleBold').checked;
+  state.fonts.title = safeNum(document.getElementById('fontTitle').value, 18);
+  state.fonts.subtitle = safeNum(document.getElementById('fontSubtitle').value, 13);
+  state.fonts.axis = safeNum(document.getElementById('fontAxis').value, 11.5);
+  state.fonts.footer = safeNum(document.getElementById('fontFooter').value, 11);
+  update();
+}
+
+function safeNum(v, fallback) {
+  const n = parseFloat(v);
+  return isNaN(n) || n <= 0 ? fallback : n;
+}
+
+// The inverse of syncFieldsToState: pushes `state` back out to every
+// sidebar control. Needed once, right after loading a saved chart by
+// slug — every other code path builds state FROM the fields (typing,
+// clicking), so without this the fields would keep showing the built-in
+// sample's values while the preview and data grid (which read `state`
+// directly) showed the loaded chart's, out of sync with each other.
+function syncFieldsFromState() {
+  document.getElementById('titleInput').value = state.title;
+  document.getElementById('subtitleInput').value = state.subtitle;
+  document.getElementById('sourceLabel').value = state.sourceLabel;
+  document.getElementById('sourceUrl').value = state.sourceUrl;
+  document.getElementById('sourceNote').value = state.sourceNote;
+  document.getElementById('fmtPrefix').value = state.fmt.prefix;
+  document.getElementById('fmtSuffix').value = state.fmt.suffix;
+  document.getElementById('fmtDecimals').value = String(state.fmt.decimals);
+  document.getElementById('toggleXAxis').checked = state.showXAxis;
+  document.getElementById('toggleYAxis').checked = state.showYAxis;
+  document.getElementById('toggleLegend').checked = state.showLegend;
+  document.getElementById('yAxisMin').value = state.yAxisMin;
+  document.getElementById('yAxisMax').value = state.yAxisMax;
+  document.getElementById('toggleTitleBold').checked = state.titleBold;
+  document.getElementById('fontTitle').value = state.fonts.title;
+  document.getElementById('fontSubtitle').value = state.fonts.subtitle;
+  document.getElementById('fontAxis').value = state.fonts.axis;
+  document.getElementById('fontFooter').value = state.fonts.footer;
+
+  document.querySelectorAll('#themeToggle button').forEach(b => b.classList.toggle('active', b.dataset.theme === state.theme));
+  document.querySelectorAll('#chartTypeGrid button').forEach(b => b.classList.toggle('active', b.dataset.type === state.chartType));
+  applyChartTypeUI(state.chartType);
+}
+
+/* =========================================================================
+   FORMAT + RENDER
+   ========================================================================= */
+function fmtNum(v) {
+  return ChartLib.fmtNum(state, v);
+}
+
+function seriesColors() {
+  return ChartLib.seriesColors(state);
+}
+
+function visibleSeriesIndices() {
+  return ChartLib.visibleSeriesIndices(state);
+}
+
+function yAxisRange() {
+  return ChartLib.yAxisRange(state);
+}
+
+function parseXValue(cat, rowIndex) {
+  return ChartLib.parseXValue(cat, rowIndex);
+}
+
+// Viewer-facing legend click-to-hide state — see the comment on
+// ChartLib.buildOption for why this lives outside `state` and has to be
+// threaded back in on every render.
+let legendSelected = {};
+
+function buildOption() {
+  return ChartLib.buildOption(state, legendSelected);
+}
+
+let hasPublishedOnce = false;
+
+function update() {
+  const t = THEMES[state.theme];
+
+  if (!slugTouched && typeof document !== 'undefined' && document.getElementById('slugInput')) {
+    document.getElementById('slugInput').value = slugify(state.title || 'untitled-chart');
+  }
+  if (hasPublishedOnce) {
+    document.getElementById('statusPill').textContent = 'Published — unsaved changes (republish to update)';
+  }
+
+  document.getElementById('ccTitle').textContent = state.title;
+  document.getElementById('ccTitle').style.color = t.textPrimary;
+  document.getElementById('ccTitle').style.fontSize = state.fonts.title + 'px';
+  document.getElementById('ccTitle').style.fontWeight = state.titleBold ? '700' : '500';
+  document.getElementById('ccSubtitle').textContent = state.subtitle;
+  document.getElementById('ccSubtitle').style.color = t.textSecondary;
+  document.getElementById('ccSubtitle').style.fontSize = state.fonts.subtitle + 'px';
+
+  const caption = document.getElementById('ccValueCaption');
+  if (state.chartType === 'treemap') {
+    const valueIdx = visibleSeriesIndices()[0] ?? 0;
+    caption.textContent = `Sized by: ${state.seriesNames[valueIdx] || 'Value'}`;
+    caption.style.color = t.textSecondary;
+    caption.style.display = '';
+  } else {
+    caption.textContent = '';
+    caption.style.display = 'none';
+  }
+
+  const src = document.getElementById('ccSource');
+  src.style.color = t.textSecondary;
+  src.style.fontSize = state.fonts.footer + 'px';
+  let sourceHtml = state.sourceLabel
+    ? (state.sourceUrl
+        ? `<a href="${escapeAttr(state.sourceUrl)}" target="_blank" rel="noopener" style="color:${t.textSecondary}">${escapeAttr(state.sourceLabel)}</a>`
+        : escapeAttr(state.sourceLabel))
+    : '';
+  if (state.sourceNote) sourceHtml += `<span class="note">${escapeAttr(state.sourceNote)}</span>`;
+  src.innerHTML = sourceHtml;
+
+  const logoWrap = document.getElementById('ccLogoWrap');
+  logoWrap.innerHTML = `<img class="cc-logo" src="${t.logo}" alt="${escapeAttr(t.logoAlt)}">`;
+
+  if (!chart) {
+    chart = echarts.init(document.getElementById('ccBody'), null, { renderer: 'svg' });
+  }
+  chart.setOption(buildOption(), true);
+  renderHtmlLegend();
+
+  updateEmbed();
+}
+
+function renderHtmlLegend() {
+  const wrap = document.getElementById('ccLegend');
+  const t = THEMES[state.theme];
+
+  if (state.chartType === 'treemap') {
+    // Treemap colours by category (row), not by series, so the legend
+    // mirrors that: one swatch per category, matching buildOption()'s
+    // `t.series[ri % t.series.length]` cycling. Hover highlights the
+    // matching box instead of a click-to-hide toggle, since removing a
+    // box would mean re-sizing the whole treemap layout.
+    const eligible = state.showLegend && state.categories.length > 1;
+    if (!eligible) { wrap.innerHTML = ''; return; }
+    wrap.style.fontSize = state.fonts.footer + 'px';
+    wrap.innerHTML = state.categories.map((cat, ri) => `
+      <button type="button" class="cc-legend-item" data-row="${ri}" style="color:${t.textSecondary}">
+        <span class="cc-legend-dot" style="background:${t.series[ri % t.series.length]}"></span>${escapeAttr(cat)}
+      </button>`).join('');
+    wrap.querySelectorAll('.cc-legend-item').forEach(btn => {
+      const ri = +btn.dataset.row;
+      btn.addEventListener('mouseenter', () => chart.dispatchAction({ type: 'highlight', seriesIndex: 0, dataIndex: ri }));
+      btn.addEventListener('mouseleave', () => chart.dispatchAction({ type: 'downplay', seriesIndex: 0, dataIndex: ri }));
+    });
+    return;
+  }
+
+  const visIdx = visibleSeriesIndices();
+  const eligible = state.showLegend && visIdx.length > 1;
+  if (!eligible) { wrap.innerHTML = ''; return; }
+  const colors = seriesColors();
+  wrap.style.fontSize = state.fonts.footer + 'px';
+  // is-off is derived from legendSelected on every render (not toggled ad
+  // hoc on click) so the button always matches what's actually drawn,
+  // including after an unrelated edit forces a full re-render.
+  wrap.innerHTML = visIdx.map(i => {
+    const name = state.seriesNames[i];
+    const off = legendSelected[name] === false;
+    return `
+    <button type="button" class="cc-legend-item${off ? ' is-off' : ''}" data-series="${i}" style="color:${t.textSecondary}">
+      <span class="cc-legend-dot" style="background:${colors[i]}"></span>${escapeAttr(name)}
+    </button>`;
+  }).join('');
+  wrap.querySelectorAll('.cc-legend-item').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const name = state.seriesNames[+btn.dataset.series];
+      legendSelected[name] = legendSelected[name] === false ? true : false;
+      update(); // full re-render: keeps the chart and every legend button in sync
+    });
+  });
+}
+
+function currentSlug() {
+  return slugify(document.getElementById('slugInput').value || state.title || 'untitled-chart');
+}
+
+function updateEmbed() {
+  const slug = currentSlug();
+  // Real embed snippet, pointed at wherever this app is actually running
+  // (localhost while testing, the Vercel URL once deployed) — this is the
+  // pattern to paste into a HubSpot page, matching Flourish's own
+  // div+script+noscript shape. No thumbnail image yet (PNG export is a
+  // "could have" that isn't built), so the noscript fallback is text.
+  const origin = window.location.origin;
+  const html = `<div class="ki-chart" data-src="chart/${slug}">
+  <script src="${origin}/embed.js">&lt;/script&gt;
+  <noscript>${escapeAttr(state.title || 'Chart')} — view at ${origin}/chart/${slug}</noscript>
+</div>`;
+  document.getElementById('embedBox').innerHTML = '<span class="lbl">HTML</span>' + html
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/&lt;\/script&amp;gt;/, '&lt;/script&gt;');
+}
+
+function slugify(s) {
+  return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '').slice(0, 40) || 'chart';
+}
+
+/* =========================================================================
+   PUBLISH — saves the current chart state to /api/charts/<slug>, which
+   embed.js then fetches at render time. Until the slug field is edited by
+   hand, it tracks the title (Flourish-style auto-slug); typing in it
+   directly takes over from there.
+   ========================================================================= */
+let slugTouched = false;
+document.getElementById('slugInput').addEventListener('input', () => { slugTouched = true; updateEmbed(); });
+
+// The author name is just a plain text field, remembered on this device
+// (localStorage) so a colleague doesn't have to retype it every publish —
+// no login, no account. It's per-browser, not per-person: if two people
+// share a machine, the field is theirs to correct before publishing.
+const AUTHOR_STORAGE_KEY = 'keystoneview.authorName';
+try {
+  const savedAuthor = localStorage.getItem(AUTHOR_STORAGE_KEY);
+  if (savedAuthor) document.getElementById('authorInput').value = savedAuthor;
+} catch {}
+
+function renderHistory() {
+  const panel = document.getElementById('historyPanel');
+  const list = document.getElementById('historyList');
+  const entries = Array.isArray(state.changeLog) ? state.changeLog.slice().reverse() : [];
+  if (!entries.length) { panel.style.display = 'none'; list.innerHTML = ''; return; }
+  panel.style.display = '';
+  list.innerHTML = entries.map(e => {
+    const d = new Date(e.at);
+    const dateStr = isNaN(d) ? '' : d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) + ' at ' + d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    return `<li class="history-item">
+      <div class="h-top"><span>${escapeAttr(e.author || 'Unknown')}</span><span class="h-date">${dateStr}</span></div>
+      ${e.note ? `<div class="h-note">${escapeAttr(e.note)}</div>` : ''}
+    </li>`;
+  }).join('');
+}
+
+document.getElementById('publishBtn').addEventListener('click', async () => {
+  const slug = currentSlug();
+  const btn = document.getElementById('publishBtn');
+  const status = document.getElementById('publishStatus');
+  const authorName = document.getElementById('authorInput').value.trim();
+  const changeNote = document.getElementById('changeNoteInput').value.trim();
+  try { localStorage.setItem(AUTHOR_STORAGE_KEY, authorName); } catch {}
+  btn.disabled = true;
+  btn.textContent = 'Publishing…';
+  status.textContent = '';
+  try {
+    const res = await fetch(`/api/charts/${encodeURIComponent(slug)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...state, authorName, changeNote }),
+    });
+    if (!res.ok) throw new Error(`Server responded ${res.status}`);
+    const record = await res.json();
+    // Pick up createdAt/updatedAt/changeLog (and folder) the server just
+    // stamped, so the history list and dates are correct without a
+    // separate reload.
+    Object.assign(state, record);
+    document.getElementById('changeNoteInput').value = '';
+    hasPublishedOnce = true;
+    document.getElementById('statusPill').textContent = 'Published';
+    status.textContent = `Published to /chart/${slug} — paste the embed snippet below wherever you want it to show up.`;
+    updateEmbed();
+    renderHistory();
+  } catch (err) {
+    status.textContent = `Publish failed: ${err.message}. Is the app running (npm run dev)?`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Publish';
+  }
+});
+
+window.addEventListener('resize', () => chart && chart.resize());
+// Belt-and-braces: catch container-size changes the window resize event
+// won't fire for (the desktop/mobile CSS transition, or this artifact
+// being hosted in a panel that itself resizes) rather than trusting a
+// fixed set of breakpoints again.
+new ResizeObserver(() => chart && chart.resize()).observe(document.getElementById('chartCard'));
+
+/* init */
+// A ?slug=<slug> in the URL (the "Edit" link from charts.html) means
+// load that published chart's saved state instead of starting from the
+// built-in sample — everything else about the editor works the same
+// either way, since it's all driven off `state`.
+async function init() {
+  const slug = new URLSearchParams(location.search).get('slug');
+  let loadedExisting = false;
+  if (slug) {
+    try {
+      const res = await fetch(`/api/charts/${encodeURIComponent(slug)}`);
+      if (res.ok) {
+        Object.assign(state, await res.json());
+        syncFieldsFromState(); // push the loaded state out to every sidebar control
+        document.getElementById('slugInput').value = slug;
+        slugTouched = true; // keep the loaded slug — don't let title edits retarget it
+        loadedExisting = true;
+      } else {
+        document.getElementById('publishStatus').textContent = `Couldn't find a chart at "${slug}" — starting a new one instead.`;
+      }
+    } catch (err) {
+      document.getElementById('publishStatus').textContent = `Couldn't load "${slug}": ${err.message}. Starting a new one instead.`;
+    }
+  }
+  renderGrid();
+  update(); // hasPublishedOnce is still false here, so this won't show a false "unsaved changes"
+  if (loadedExisting) {
+    hasPublishedOnce = true;
+    document.getElementById('statusPill').textContent = 'Published';
+    renderHistory();
+  }
+}
+init();
+</script>
+</body>
+</html>
